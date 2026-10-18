@@ -53,6 +53,11 @@ main{max-width:1400px;margin:auto;padding:0 5% 40px}
 
 .field{display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:600;color:var(--muted)}
 .field input,.field select{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:16px;font-weight:500;color:var(--ink);background:#fff;min-height:44px}
+.count-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.stepper{display:flex;gap:6px;align-items:center}
+.stepper .button{min-width:44px;padding:8px 0;font-size:20px;line-height:1}
+.stepper input{width:76px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:9px 6px;font-size:18px;font-weight:650;min-height:44px}
+.small{font-size:14px}
 .team-names{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:16px}
 .facts{margin:0;display:grid;gap:10px}
 .facts div{display:grid;grid-template-columns:150px 1fr;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
@@ -73,10 +78,10 @@ details.card li{margin-bottom:6px}
 .opt-card .cost{font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
 .opt-card .detail{grid-column:2/4;color:var(--muted);font-size:13px;line-height:1.35;margin-top:-2px}
 
-.table-wrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.table-wrap{overflow:auto;max-height:72vh;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 table{border-collapse:collapse;width:100%;font-size:16px}
 th,td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-thead th{font-size:13px;letter-spacing:.03em;color:var(--muted);font-weight:700;background:#fafaf7;white-space:nowrap}
+thead th{font-size:13px;letter-spacing:.03em;color:var(--muted);font-weight:700;background:#fafaf7;white-space:nowrap;position:sticky;top:0;z-index:1}
 tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
 tbody th{font-weight:700;white-space:nowrap}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -123,6 +128,7 @@ tbody th{font-weight:700;white-space:nowrap}
 
 .board{display:grid;gap:10px;margin-top:6px}
 .bar-row{display:grid;grid-template-columns:110px 1fr 120px;gap:12px;align-items:center;font-size:15px}
+.bar-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar{position:relative;height:26px;background:#f1f3ef;border-radius:6px;overflow:hidden;display:flex}
 .bar .p{background:var(--green)}
 .bar .r{background:var(--amber)}

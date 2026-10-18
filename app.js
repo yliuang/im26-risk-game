@@ -3,7 +3,9 @@
   'use strict';
   const M = window.RMGame;
   const STORE = 'im26-risk-game-v1';
-  const LETTERS = 'ABCDEFGHIJ';
+  const MAX_TEAMS = 40;
+  // Team ids A–Z, then AA, AB, …
+  const teamId = i => (i < 26 ? '' : String.fromCharCode(64 + Math.floor(i / 26))) + String.fromCharCode(65 + (i % 26));
   const STEPS = ['Setup', 'Stage 1 decisions', 'Stage 1 dice', 'Stage 1 results', 'Stage 2 decisions', 'Stage 2 dice', 'Final results'];
   const SHORT = { D1: 'HO-3', D2: 'Jewelry', D3: 'Earthquake', D4: 'Air-con', D5: 'Auto', D6: 'Supp. LTD', D7: 'Health plan', D8: 'Ski lessons' };
   const app = document.getElementById('app');
@@ -21,8 +23,8 @@
   function fresh(n, names) {
     const teams = [], decisions = {};
     for (let i = 0; i < n; i++) {
-      teams.push({ id: LETTERS[i], name: (names && names[i]) || 'Team ' + LETTERS[i] });
-      decisions[LETTERS[i]] = {};
+      teams.push({ id: teamId(i), name: (names && names[i]) || 'Team ' + teamId(i) });
+      decisions[teamId(i)] = {};
     }
     return { v: 1, step: 0, teams, decisions, rolls: {} };
   }
@@ -44,6 +46,9 @@
   }
   const allComplete = stage => state.teams.every(t => M.complete(state.decisions[t.id], stage));
   const allRolled = stage => M.scenariosOf(stage).every(s => state.rolls[s.id] != null);
+  // Long name lists (many teams) are shortened in status messages
+  const listNames = names => names.length <= 6 ? names.map(esc).join(', ')
+    : `${names.slice(0, 5).map(esc).join(', ')} and ${names.length - 5} more`;
   const teamName = id => (state.teams.find(t => t.id === id) || { name: id }).name;
   const overBudget = (t, stage) => { const b = M.budget(state.decisions[t.id]); return stage === 1 ? b.over1 : b.over2; };
 
@@ -79,9 +84,15 @@
     <div class="cols">
       <section class="card">
         <h2>Teams</h2>
-        <label class="field" style="max-width:220px">Number of teams
-          <select data-input="team-count">${[2, 3, 4, 5, 6, 7, 8, 9, 10].map(k => `<option${k === n ? ' selected' : ''}>${k}</option>`).join('')}</select>
-        </label>
+        <div class="count-row">
+          <label class="field" for="team-count">Number of teams</label>
+          <div class="stepper">
+            <button class="button" data-action="team-step" data-delta="-1" aria-label="One team fewer"${n <= 1 ? ' disabled' : ''}>−</button>
+            <input id="team-count" data-input="team-count" type="number" min="1" max="${MAX_TEAMS}" value="${n}" inputmode="numeric">
+            <button class="button" data-action="team-step" data-delta="1" aria-label="One team more"${n >= MAX_TEAMS ? ' disabled' : ''}>+</button>
+          </div>
+          <span class="muted small">1 to ${MAX_TEAMS} teams; the slides use 6 or 7. Teams can be added or removed at any point.</span>
+        </div>
         <div class="team-names">${state.teams.map(t => `<label class="field">Team ${t.id}<input data-input="team-name" data-team="${t.id}" value="${esc(t.name)}" maxlength="24" autocomplete="off"></label>`).join('')}</div>
       </section>
       <section class="card">
@@ -128,8 +139,8 @@
     const missing = state.teams.filter(t => !M.complete(state.decisions[t.id], stage)).map(t => t.name);
     const over = state.teams.filter(t => overBudget(t, stage)).map(t => t.name);
     const blocked = missing.length > 0 || over.length > 0;
-    const msg = missing.length ? `<span class="warn">Still missing: ${missing.map(esc).join(', ')}</span>`
-      : over.length ? `<span class="warn">Over budget: ${over.map(esc).join(', ')}</span>`
+    const msg = missing.length ? `<span class="warn">Still missing: ${listNames(missing)}</span>`
+      : over.length ? `<span class="warn">Over budget: ${listNames(over)}</span>`
       : '<span class="note">All decisions entered.</span>';
     return `
     <div class="page-head"><div><p class="eyebrow">Stage ${stage} · Decisions</p><h2>${stage === 1 ? 'Homeowners property and auto physical damage' : 'Health and disability risks'}</h2></div>
@@ -168,7 +179,7 @@
         const hit = state.teams.filter(t => state.decisions[t.id].D8 !== 'a');
         cls = hit.length ? 'loss' : 'safe';
         status = hit.length
-          ? `<span class="chip partial">Loss only without ski lessons</span><div class="who">${hit.map(t => esc(t.name)).join(', ')}</div>`
+          ? `<span class="chip partial">Loss only without ski lessons</span><div class="who">${hit.length === state.teams.length ? 'All teams' : `${hit.length} of ${state.teams.length} teams:`} ${hit.map(t => esc(t.name)).join(', ')}</div>`
           : '<span class="chip safe">No loss: every team took ski lessons</span>';
       }
       return `<article class="scen ${cls}">
@@ -369,8 +380,8 @@
       state.teams = state.teams.slice(0, n);
     } else {
       for (let i = cur; i < n; i++) {
-        state.teams.push({ id: LETTERS[i], name: 'Team ' + LETTERS[i] });
-        state.decisions[LETTERS[i]] = {};
+        state.teams.push({ id: teamId(i), name: 'Team ' + teamId(i) });
+        state.decisions[teamId(i)] = {};
       }
     }
     save();
@@ -417,7 +428,8 @@
       render();
       const p = document.getElementById('explain');
       if (p) p.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
-    } else if (a === 'csv') downloadCsv();
+    } else if (a === 'team-step') setTeamCount(Math.max(1, Math.min(MAX_TEAMS, state.teams.length + +b.dataset.delta)));
+    else if (a === 'csv') downloadCsv();
   });
 
   document.addEventListener('toggle', e => {
@@ -433,7 +445,10 @@
     }
   });
   app.addEventListener('change', e => {
-    if (e.target.dataset.input === 'team-count') setTeamCount(+e.target.value);
+    if (e.target.dataset.input === 'team-count') {
+      const n = parseInt(e.target.value, 10);
+      setTeamCount(Number.isFinite(n) ? Math.max(1, Math.min(MAX_TEAMS, n)) : state.teams.length);
+    }
   });
   app.addEventListener('submit', e => {
     const f = e.target.closest('[data-manual]');
