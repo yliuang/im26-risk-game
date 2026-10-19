@@ -125,9 +125,50 @@
 
   // ---- 02 / 05 Decisions --------------------------------------------------------------------
 
+  // What students need during the discussion: the scenarios and the facts from the slides
+  const CARD_TITLE = { D1: 'HO-3 homeowners', D2: 'Jewelry endorsement', D3: 'Earthquake endorsement', D4: 'Air-con endorsement',
+    D5: 'Auto physical damage', D6: 'Supplemental LTD', D7: 'Health plan', D8: 'Ski lessons + helmet' };
+  const SCEN_INFO = {
+    S1: ['Fire in the attached garage', 'CHF 40,000 (25% of the house)'],
+    S2: ['Theft of belongings, incl. all jewelry', 'CHF 22,000 (incl. CHF 10,000 jewelry)'],
+    S3: ['Earthquake', 'House destroyed (CHF 160,000) + CHF 18,000 loss of use'],
+    S4: ['Air-conditioning maintenance', 'CHF 800'],
+    S5: ['Camry scraped by a fire hydrant', 'CHF 6,300 (collision)'],
+    S6: ['John’s skiing accident', 'CHF 13,000 surgery, out of network + 5 months off work (CHF 30,000 wages)'],
+    S7: ['Tom’s serious illness', 'CHF 5,500, in network (tests + 8 visits)'],
+    S8: ['Karen’s pregnancy complications', 'CHF 20,000, out of network'],
+  };
+  const FACTS = {
+    1: ['<b>Budget</b> CHF 6,000 for premiums; unused money carries over to Stage 2. Premiums are paid once.',
+        '<b>Values</b> house CHF 160,000 · other belongings CHF 70,000 · jewelry CHF 10,000 · Camry CHF 16,000.',
+        '<b>80% coinsurance</b> insure the house for less than CHF 128,000 and every claim on it is cut in proportion.',
+        '<b>HO-3</b> CHF 250 deductible per claim · belongings (C) covered up to 50% of the house cover (A) · stolen jewelry only up to CHF 1,500 · <b>no earthquake cover</b>.',
+        '<b>Risk matrix</b> above 40% = frequent · CHF 2,500 or more = severe. Compare probability × loss with the premium.'],
+    2: ['<b>Budget</b> CHF 6,000 plus your team’s unused Stage 1 money (see “Budget” below).',
+        '<b>John</b> is the only earner: CHF 8,333 a month gross, CHF 6,000 take-home.',
+        '<b>If John can’t work</b> his employer pays 100% for 90 days, then LTD pays 50% of salary, at most CHF 2,000 a month.',
+        '<b>PPO</b> in network: CHF 300 deductible · out of network: CHF 600 deductible, then 20%, at most CHF 3,000 a year.',
+        '<b>HMO</b> in network only, CHF 25 per visit · <b>out of network not covered</b>.',
+        'Deductibles and limits are per year. Ski lessons halve the chance of the skiing accident.'],
+  };
+
+  function discussionInfo(stage) {
+    const rows = M.scenariosOf(stage).map(s => {
+      const chance = s.maxWithControl
+        ? `<b>${s.max * 5}%</b> <span class="muted">(1–${s.max})</span> · <b>${s.maxWithControl * 5}%</b> <span class="muted">with lessons</span>`
+        : `<b>${s.max * 5}%</b> <span class="muted">(roll 1–${s.max})</span>`;
+      return `<tr><th scope="row"><span class="tag">${s.id}</span> ${esc(SCEN_INFO[s.id][0])}</th><td class="num">${chance}</td><td>${esc(SCEN_INFO[s.id][1])}</td></tr>`;
+    }).join('');
+    return `<div class="info-grid">
+      <section class="card info-card"><h3>What can happen in Stage ${stage}</h3>
+        <table class="mini"><thead><tr><th>Scenario</th><th class="num">Chance</th><th>Loss if it happens</th></tr></thead><tbody>${rows}</tbody></table></section>
+      <section class="card info-card"><h3>Good to know</h3><ul class="facts-list">${FACTS[stage].map(f => `<li>${f}</li>`).join('')}</ul></section>
+    </div>`;
+  }
+
   function pageDecisions(stage) {
     const decs = M.decisionsOf(stage);
-    const legend = decs.map(x => `<article class="opt-card"><h3><span class="tag">${x.id}</span>${esc(x.title)}</h3><ul>${x.options.map(o => `<li><span class="key">(${o.key})</span><span>${esc(o.short)}</span><span class="cost">${o.cost ? chf(o.cost) : '—'}</span><span class="detail">${esc(o.detail)}</span></li>`).join('')}</ul></article>`).join('');
+    const legend = decs.map(x => `<article class="opt-card"><h3><span class="tag">${x.id}</span>${esc(CARD_TITLE[x.id] || x.title)}</h3><ul>${x.options.map(o => `<li><span class="key">(${o.key})</span><span>${esc(o.short)}</span><span class="cost">${o.cost ? chf(o.cost) : '—'}</span><span class="detail">${esc(o.detail)}</span></li>`).join('')}</ul></article>`).join('');
     const rows = state.teams.map(t => {
       const d = state.decisions[t.id], b = M.budget(d);
       const cost = stage === 1 ? b.c1 : b.c2, avail = stage === 1 ? b.avail1 : b.avail2;
@@ -144,7 +185,9 @@
       : '<span class="note">All decisions entered.</span>';
     return `
     <div class="page-head"><div><p class="eyebrow">Stage ${stage} · Decisions</p><h2>${stage === 1 ? 'Homeowners property and auto physical damage' : 'Health and disability risks'}</h2></div>
-      <p>${stage === 1 ? `Each team has ${chf(M.STAGE_BUDGET)} for premiums; unused budget rolls over to Stage 2.` : `Each team has ${chf(M.STAGE_BUDGET)} plus whatever it did not spend in Stage 1, for premiums and loss control.`}</p></div>
+      <p>Discuss with your team, then report one option per decision.</p></div>
+    ${discussionInfo(stage)}
+    <h3 class="section-label">Your decisions: choose one option for each</h3>
     <div class="legend">${legend}</div>
     <div class="table-wrap"><table>
       <thead><tr><th>Team</th>${decs.map(x => `<th>${x.id} · ${SHORT[x.id]}</th>`).join('')}<th class="num">${stage === 1 ? 'Premiums' : 'Premiums and loss control'}</th>${stage === 2 ? '<th class="num">Budget</th>' : ''}<th class="num">Budget left</th></tr></thead>
