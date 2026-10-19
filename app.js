@@ -263,37 +263,63 @@
 
   function pageFinal() {
     const res = results();
-    const teams = state.teams.map(t => {
+    const rankBy = state.rankBy === 'expected' ? 'expected' : 'final';
+    const key = rankBy === 'expected' ? 'exp' : 'nw', other = rankBy === 'expected' ? 'nw' : 'exp';
+    const rows = state.teams.map(t => {
       const r = res[t.id];
       const ok = r.stage[1].complete && r.stage[2].complete;
-      return { t, r, ok,
+      return { id: t.id, name: t.name, ok, bench: false,
         nw: ok ? r.nw2 : null,
         exp: ok ? r.expectedNw : null,
         cost: r.stage[1].cost + r.stage[2].cost,
         retained: r.stage[1].retained + r.stage[2].retained,
         expRetained: ok ? r.stage[1].expected + r.stage[2].expected : null };
     });
-    const rk = ranks(teams.map(x => x.nw)), erk = ranks(teams.map(x => x.exp));
-    teams.forEach((x, i) => { x.rank = rk[i]; x.erank = erk[i]; });
-    const order = teams.slice().sort((a, b) => (a.rank == null) - (b.rank == null) || a.rank - b.rank);
+    // The benchmark package, played with the same dice as the teams
+    const br = M.teamResult(OPTIMUM.d, state.rolls);
+    const bench = { name: 'Benchmark', ok: true, bench: true, nw: br.nw2, exp: br.expectedNw,
+      cost: br.stage[1].cost + br.stage[2].cost, retained: br.stage[1].retained + br.stage[2].retained,
+      expRetained: br.stage[1].expected + br.stage[2].expected };
+    const rk = ranks(rows.map(x => x[key])), ork = ranks(rows.map(x => x[other]));
+    rows.forEach((x, i) => { x.rank = rk[i]; x.orank = ork[i]; });
+    const order = rows.slice().sort((a, b) => (a.rank == null) - (b.rank == null) || a.rank - b.rank);
+    // The benchmark sits among the teams by the chosen measure; teams that tie with it stay above it
+    const at = order.findIndex(x => x[key] == null || x[key] < bench[key] - 1e-6);
+    const list = order.slice();
+    list.splice(at < 0 ? list.length : at, 0, bench);
     const done = allComplete(1) && allComplete(2) && allRolled(1) && allRolled(2);
+    const complete = rows.filter(x => x.ok);
+    const beatFinal = complete.filter(x => x.nw > bench.nw + 1e-6).length;
+    const matchExp = complete.filter(x => x.exp >= bench.exp - 0.5).length;
 
-    const board = order.map(x => `<tr>
+    const luck = x => `<td class="num ${x.nw - x.exp >= 0 ? 'pos' : 'neg'}">${(x.nw - x.exp >= 0 ? '+' : '') + chf(x.nw - x.exp)}</td>`;
+    const board = list.map(x => x.bench ? `<tr class="bench-row">
+      <td><span class="rank bench" title="Benchmark">★</span></td>
+      <th scope="row">Benchmark <span class="small muted">lowest expected cost</span></th>
+      <td class="num${key === 'nw' ? ' strong' : ''}">${allRolled(1) && allRolled(2) ? chf(x.nw) : '—'}</td>
+      <td class="num">${chf(x.cost)}</td>
+      <td class="num">${allRolled(1) && allRolled(2) ? chf(x.retained) : '—'}</td>
+      <td class="num${key === 'exp' ? ' strong' : ''}">${chf(x.exp)}</td>
+      <td class="num">—</td>
+      ${allRolled(1) && allRolled(2) ? luck(x) : '<td class="num">—</td>'}</tr>`
+      : `<tr>
       <td>${x.rank == null ? '—' : `<span class="rank${x.rank === 1 ? ' first' : ''}">${x.rank}</span>`}</td>
-      <th scope="row">${esc(x.t.name)}</th>
-      <td class="num strong">${x.ok ? chf(x.nw) : '—'}</td>
+      <th scope="row">${esc(x.name)}</th>
+      <td class="num${key === 'nw' ? ' strong' : ''}">${x.ok ? chf(x.nw) : '—'}</td>
       <td class="num">${chf(x.cost)}</td>
       <td class="num">${x.ok ? chf(x.retained) : '—'}</td>
-      <td class="num">${x.ok ? chf(x.exp) : '—'}</td>
-      <td class="num">${x.erank == null ? '—' : x.erank}</td>
-      <td class="num ${x.ok ? (x.nw - x.exp >= 0 ? 'pos' : 'neg') : ''}">${x.ok ? (x.nw - x.exp >= 0 ? '+' : '') + chf(x.nw - x.exp) : '—'}</td></tr>`).join('');
+      <td class="num${key === 'exp' ? ' strong' : ''}">${x.ok ? chf(x.exp) : '—'}</td>
+      <td class="num">${x.orank == null ? '—' : x.orank}</td>
+      ${x.ok ? luck(x) : '<td class="num">—</td>'}</tr>`).join('');
 
-    const scale = Math.max(1, ...teams.filter(x => x.ok).map(x => Math.max(x.cost + x.retained, x.cost + x.expRetained)));
-    const bars = order.filter(x => x.ok).map(x => {
+    const shown = list.filter(x => x.ok);
+    const scale = 1.08 * Math.max(1, ...shown.map(x => Math.max(x.cost + x.retained, x.cost + x.expRetained)));
+    const bars = shown.map(x => {
       const p = 100 * x.cost / scale, r = 100 * x.retained / scale, e = 100 * (x.cost + x.expRetained) / scale;
-      return `<div class="bar-row"><span>${esc(x.t.name)}</span>
-        <div class="bar" role="img" aria-label="${esc(x.t.name)}: premiums ${chf(x.cost)}, retained losses ${chf(x.retained)}, expected cost ${chf(x.cost + x.expRetained)}"><span class="p" style="width:${p}%"></span><span class="r" style="width:${r}%"></span><span class="e" style="left:calc(${e}% - 1px)"></span></div>
-        <span class="num">${chf(x.cost + x.retained)}</span></div>`;
+      const label = x.bench ? '<span class="bench-label">Benchmark</span>' : `<span>${esc(x.name)}</span>`;
+      return `<div class="bar-row${x.bench ? ' bench' : ''}">${label}
+        <div class="bar" role="img" aria-label="${esc(x.name)}: premiums ${chf(x.cost)}, retained losses ${chf(x.retained)}, expected cost ${chf(x.cost + x.expRetained)}"><div class="fill"><span class="p" style="width:${p}%"></span><span class="r" style="width:${r}%"></span></div><span class="e" style="left:${e}%"></span></div>
+        <span class="num">${chf(x.cost + x.retained)}<small class="exp">expected ${chf(x.cost + x.expRetained)}</small></span></div>`;
     }).join('');
 
     const pkg = M.DECISIONS.map(x => { const o = x.options.find(o => o.key === OPTIMUM.d[x.id]); return `<li><b>${x.id}</b> (${o.key}) ${esc(SHORT[x.id])}: ${esc(o.short)}</li>`; }).join('');
@@ -307,24 +333,33 @@
 
     const allScen = M.SCENARIOS;
     const breakdown = state.teams.map(t => `<tr><th scope="row">${esc(t.name)}</th>${allScen.map(s => amountCell(t.id, s.id, res[t.id].scen[s.id])).join('')}</tr>`).join('');
+    const summary = done
+      ? `${beatFinal} of ${complete.length} team${complete.length === 1 ? '' : 's'} beat the benchmark’s final net worth; ${matchExp} matched its expected net worth.`
+      : 'The comparison with the benchmark appears once all decisions and rolls are in.';
 
     return `
     <div class="page-head"><div><p class="eyebrow">Final results</p><h2>Who protected the Smiths’ net worth best?</h2></div>
-      <p>Expected net worth shows how each package would do on average with the stated probabilities. The gap to the actual result is luck.</p></div>
+      <div class="rank-toggle"><span class="muted small">Rank by</span>
+        <div class="seg wide" role="group" aria-label="Rank teams by">
+          <button data-action="rank-by" data-by="final" aria-pressed="${rankBy === 'final'}">Final net worth</button>
+          <button data-action="rank-by" data-by="expected" aria-pressed="${rankBy === 'expected'}">Expected net worth</button>
+        </div></div></div>
     ${done ? '' : '<p class="warn" style="color:var(--error);font-weight:600">Some decisions or rolls are still missing, so these results are provisional.</p>'}
+    <p class="summary">${rankBy === 'final' ? 'Ranked by final net worth: the result after the dice, as in the game rules.' : 'Ranked by expected net worth: the quality of the decisions, with luck taken out.'} ${summary}</p>
     <div class="table-wrap"><table>
-      <thead><tr><th>Rank</th><th>Team</th><th class="num">Final net worth</th><th class="num">Premiums and loss control</th><th class="num">Retained losses</th><th class="num">Expected net worth</th><th class="num">Rank by expected value</th><th class="num">Luck</th></tr></thead>
+      <thead><tr><th>Rank</th><th>Team</th><th class="num">Final net worth</th><th class="num">Premiums and loss control</th><th class="num">Retained losses</th><th class="num">Expected net worth</th><th class="num">${rankBy === 'final' ? 'Rank by expected' : 'Rank by final'}</th><th class="num">Luck</th></tr></thead>
       <tbody>${board}</tbody></table></div>
+    <p class="table-note"><b>Expected net worth</b> = CHF 218,000 − premiums − expected retained losses (for each scenario: its probability × what the team would keep under its package). <b>Luck</b> = final net worth − expected net worth: positive means fewer losses than average. <b>★ Benchmark</b>: the lowest-expected-cost package within budget, played with the same dice.</p>
     <div class="cols">
       <section class="card">
         <h2>Cost of risk</h2>
-        <p class="muted">Premiums and loss control plus retained losses. The black mark is the expected cost of the team’s package.</p>
+        <p class="muted">Premiums and loss control plus retained losses. The black mark is the expected cost of the package.</p>
         <div class="board">${bars || '<p class="muted">No complete teams yet.</p>'}</div>
         <div class="key-row"><span><i style="background:var(--green)"></i>Premiums and loss control</span><span><i style="background:var(--amber)"></i>Retained losses</span><span><i style="background:var(--ink);width:3px"></i>Expected cost</span></div>
       </section>
       <section class="card">
         <h2>Expected-value benchmark</h2>
-        <p class="muted">The package with the lowest expected cost of risk (premiums plus probability-weighted retained losses) that stays within budget: ${chf(OPTIMUM.total)}, i.e. an expected final net worth of ${chf(M.START_NET_WORTH - OPTIMUM.total)}.</p>
+        <p class="muted">The package with the lowest expected cost of risk (premiums plus probability-weighted retained losses) that stays within budget: ${chf(OPTIMUM.total)}, i.e. an expected final net worth of ${chf(M.START_NET_WORTH - OPTIMUM.total)}.${allRolled(1) && allRolled(2) ? ` With today’s dice it ends at ${chf(bench.nw)}.` : ''}</p>
         <ul class="pkg">${pkg}</ul>
         <p class="muted" style="margin-top:12px;font-size:15px">It ignores risk aversion: a family that cannot absorb a large loss may sensibly pay more than this to cap the worst outcome.</p>
       </section>
@@ -398,6 +433,10 @@
         ...M.SCENARIOS.map(s => r.scen[s.id].retained), r.stage[1].cost, r.stage[1].retained, r.nw1,
         r.stage[2].cost, r.stage[2].retained, r.nw2, r.expectedNw == null ? '' : Math.round(r.expectedNw)];
     });
+    const br = M.teamResult(OPTIMUM.d, state.rolls);
+    rows.push(['Benchmark (lowest expected cost)', ...M.DECISIONS.map(x => OPTIMUM.d[x.id]), ...M.SCENARIOS.map(s => state.rolls[s.id] == null ? '' : state.rolls[s.id]),
+      ...M.SCENARIOS.map(s => br.scen[s.id].retained), br.stage[1].cost, br.stage[1].retained, br.nw1,
+      br.stage[2].cost, br.stage[2].retained, br.nw2, Math.round(br.expectedNw)]);
     const csv = [head, ...rows].map(row => row.map(v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
@@ -428,7 +467,8 @@
       render();
       const p = document.getElementById('explain');
       if (p) p.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
-    } else if (a === 'team-step') setTeamCount(Math.max(1, Math.min(MAX_TEAMS, state.teams.length + +b.dataset.delta)));
+    } else if (a === 'rank-by') { state.rankBy = b.dataset.by === 'expected' ? 'expected' : 'final'; save(); render(); }
+    else if (a === 'team-step') setTeamCount(Math.max(1, Math.min(MAX_TEAMS, state.teams.length + +b.dataset.delta)));
     else if (a === 'csv') downloadCsv();
   });
 
